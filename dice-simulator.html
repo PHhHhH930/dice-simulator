@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D 骰子模拟器</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #dff5ff;
+        --bg-deep: #bfeaff;
+        --ink: #163447;
+        --muted: #5d7b8c;
+        --panel: rgba(255, 255, 255, 0.78);
+        --line: rgba(54, 126, 164, 0.22);
+        --accent: #157bb3;
+        --accent-dark: #0d5f8e;
+        --die: #ffffff;
+        --pip: #1f3b4c;
+        --shadow: 0 18px 46px rgba(44, 116, 151, 0.22);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        color: var(--ink);
+        font-family:
+          "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 34rem),
+          linear-gradient(145deg, var(--bg), var(--bg-deep));
+      }
+
+      button,
+      select {
+        font: inherit;
+      }
+
+      .app-shell {
+        width: min(1120px, calc(100% - 32px));
+        min-height: calc(100vh - 32px);
+        margin: 16px auto;
+        padding: clamp(18px, 3vw, 34px);
+      }
+
+      .topbar,
+      .control-panel,
+      .score-strip,
+      .history-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .topbar {
+        margin-bottom: 28px;
+      }
+
+      .eyebrow,
+      .subtle {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .eyebrow {
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        margin-top: 6px;
+        font-size: clamp(2rem, 5vw, 4rem);
+      }
+
+      h2 {
+        font-size: clamp(1.25rem, 3vw, 2rem);
+      }
+
+      .tabs {
+        display: inline-flex;
+        gap: 8px;
+        padding: 6px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .tab-button,
+      .clear-button,
+      .roll-button {
+        min-height: 44px;
+        border: 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition:
+          transform 160ms ease,
+          background 160ms ease,
+          color 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .tab-button {
+        padding: 0 18px;
+        color: var(--accent-dark);
+        background: transparent;
+      }
+
+      .tab-button.active {
+        color: white;
+        background: var(--accent);
+        box-shadow: 0 8px 18px rgba(21, 123, 179, 0.2);
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .control-panel,
+      .history-heading {
+        flex-wrap: wrap;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .dice-count {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .dice-count select {
+        min-width: 132px;
+        min-height: 44px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--ink);
+        background: white;
+      }
+
+      .roll-button {
+        min-width: 140px;
+        padding: 0 24px;
+        color: white;
+        font-weight: 800;
+        background: linear-gradient(180deg, #188bc9, #0f6fa5);
+        box-shadow: 0 14px 28px rgba(15, 111, 165, 0.25);
+      }
+
+      .roll-button:hover,
+      .clear-button:hover,
+      .tab-button:hover {
+        transform: translateY(-1px);
+      }
+
+      .roll-button:disabled {
+        cursor: wait;
+        opacity: 0.72;
+      }
+
+      .score-strip {
+        margin: 18px 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .score-strip > div {
+        min-height: 92px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .score-strip span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+
+      .score-strip strong {
+        display: block;
+        margin-top: 8px;
+        font-size: clamp(2rem, 5vw, 3.5rem);
+        line-height: 1;
+      }
+
+      .stage {
+        position: relative;
+        min-height: 440px;
+        padding: clamp(28px, 4vw, 52px);
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.48) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.48) 1px, transparent 1px),
+          rgba(255, 255, 255, 0.45);
+        background-size: 34px 34px;
+        box-shadow: inset 0 -34px 80px rgba(87, 174, 214, 0.16);
+      }
+
+      .dice-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        gap: clamp(24px, 4vw, 44px);
+        align-items: center;
+        justify-items: center;
+        min-height: 320px;
+        perspective: 980px;
+      }
+
+      .empty-state,
+      .empty-history {
+        margin: 0;
+        color: var(--muted);
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .empty-state {
+        position: absolute;
+        inset: 50% auto auto 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .die-wrap {
+        width: 96px;
+        height: 96px;
+        perspective: 780px;
+      }
+
+      .die {
+        position: relative;
+        width: 96px;
+        height: 96px;
+        transform-style: preserve-3d;
+        transition: transform 900ms cubic-bezier(0.18, 0.85, 0.24, 1.08);
+      }
+
+      .die::after {
+        position: absolute;
+        inset: 82px -8px -18px;
+        display: block;
+        content: "";
+        border-radius: 50%;
+        background: rgba(22, 52, 71, 0.2);
+        filter: blur(14px);
+        transform: translateZ(-70px) rotateX(90deg);
+      }
+
+      .die.rolling {
+        animation: hop 900ms ease;
+      }
+
+      .face {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        gap: 8px;
+        padding: 16px;
+        border: 2px solid rgba(22, 52, 71, 0.12);
+        border-radius: 18px;
+        background: var(--die);
+        box-shadow: inset -10px -12px 24px rgba(58, 137, 176, 0.12);
+        backface-visibility: hidden;
+      }
+
+      .face span {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        align-self: center;
+        justify-self: center;
+        background: var(--pip);
+        box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.32);
+      }
+
+      .face-1 {
+        transform: translateZ(48px);
+      }
+
+      .face-2 {
+        transform: rotateY(90deg) translateZ(48px);
+      }
+
+      .face-3 {
+        transform: rotateX(90deg) translateZ(48px);
+      }
+
+      .face-4 {
+        transform: rotateX(-90deg) translateZ(48px);
+      }
+
+      .face-5 {
+        transform: rotateY(-90deg) translateZ(48px);
+      }
+
+      .face-6 {
+        transform: rotateY(180deg) translateZ(48px);
+      }
+
+      .face-1 span {
+        grid-area: 2 / 2;
+      }
+
+      .face-2 span:nth-child(1) {
+        grid-area: 1 / 1;
+      }
+
+      .face-2 span:nth-child(2) {
+        grid-area: 3 / 3;
+      }
+
+      .face-3 span:nth-child(1) {
+        grid-area: 1 / 1;
+      }
+
+      .face-3 span:nth-child(2) {
+        grid-area: 2 / 2;
+      }
+
+      .face-3 span:nth-child(3) {
+        grid-area: 3 / 3;
+      }
+
+      .face-4 span:nth-child(1) {
+        grid-area: 1 / 1;
+      }
+
+      .face-4 span:nth-child(2) {
+        grid-area: 1 / 3;
+      }
+
+      .face-4 span:nth-child(3) {
+        grid-area: 3 / 1;
+      }
+
+      .face-4 span:nth-child(4) {
+        grid-area: 3 / 3;
+      }
+
+      .face-5 span:nth-child(1) {
+        grid-area: 1 / 1;
+      }
+
+      .face-5 span:nth-child(2) {
+        grid-area: 1 / 3;
+      }
+
+      .face-5 span:nth-child(3) {
+        grid-area: 2 / 2;
+      }
+
+      .face-5 span:nth-child(4) {
+        grid-area: 3 / 1;
+      }
+
+      .face-5 span:nth-child(5) {
+        grid-area: 3 / 3;
+      }
+
+      .face-6 span:nth-child(1) {
+        grid-area: 1 / 1;
+      }
+
+      .face-6 span:nth-child(2) {
+        grid-area: 1 / 3;
+      }
+
+      .face-6 span:nth-child(3) {
+        grid-area: 2 / 1;
+      }
+
+      .face-6 span:nth-child(4) {
+        grid-area: 2 / 3;
+      }
+
+      .face-6 span:nth-child(5) {
+        grid-area: 3 / 1;
+      }
+
+      .face-6 span:nth-child(6) {
+        grid-area: 3 / 3;
+      }
+
+      .clear-button {
+        padding: 0 18px;
+        color: var(--accent-dark);
+        font-weight: 800;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid var(--line);
+      }
+
+      .history-list {
+        display: grid;
+        gap: 12px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .history-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .history-item time,
+      .history-detail {
+        color: var(--muted);
+      }
+
+      .history-rolls {
+        margin-top: 6px;
+        font-weight: 800;
+      }
+
+      .history-total {
+        font-size: 1.7rem;
+        font-weight: 900;
+        color: var(--accent-dark);
+      }
+
+      .empty-history {
+        padding: 42px 0;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @keyframes hop {
+        0%,
+        100% {
+          translate: 0 0;
+        }
+
+        35% {
+          translate: 0 -24px;
+        }
+
+        68% {
+          translate: 0 8px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .app-shell {
+          width: min(100% - 20px, 1120px);
+          margin: 10px auto;
+          padding: 12px 0 24px;
+        }
+
+        .topbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .tabs,
+        .score-strip {
+          width: 100%;
+        }
+
+        .tab-button {
+          flex: 1;
+        }
+
+        .control-panel {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .roll-button,
+        .dice-count select {
+          width: 100%;
+        }
+
+        .score-strip {
+          grid-template-columns: 1fr;
+        }
+
+        .stage {
+          min-height: 520px;
+          padding: 28px 16px;
+        }
+
+        .dice-grid {
+          grid-template-columns: repeat(2, minmax(110px, 1fr));
+          gap: 24px 16px;
+        }
+
+        .history-item {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 1ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar" aria-label="应用标题">
+        <div>
+          <p class="eyebrow">Dice Simulator</p>
+          <h1>3D 骰子模拟器</h1>
+        </div>
+        <nav class="tabs" aria-label="页面切换">
+          <button class="tab-button active" type="button" data-view="roller">掷骰</button>
+          <button class="tab-button" type="button" data-view="history">历史</button>
+        </nav>
+      </header>
+
+      <section class="view active" id="roller-view" aria-labelledby="roller-title">
+        <div class="control-panel">
+          <div>
+            <h2 id="roller-title">选择骰子数量</h2>
+            <p class="subtle">每次可以掷出 1 到 10 个骰子。</p>
+          </div>
+
+          <label class="dice-count" for="dice-count">
+            <span>骰子数量</span>
+            <select id="dice-count" aria-describedby="count-help">
+              <option value="1">1 个</option>
+              <option value="2">2 个</option>
+              <option value="3">3 个</option>
+              <option value="4">4 个</option>
+              <option value="5">5 个</option>
+              <option value="6">6 个</option>
+              <option value="7">7 个</option>
+              <option value="8">8 个</option>
+              <option value="9">9 个</option>
+              <option value="10">10 个</option>
+            </select>
+          </label>
+          <p id="count-help" class="sr-only">选择本次要掷出的骰子数量。</p>
+
+          <button class="roll-button" type="button" id="roll-button">掷骰子</button>
+        </div>
+
+        <section class="score-strip" aria-live="polite">
+          <div>
+            <span>当前骰子数量</span>
+            <strong id="current-count">0</strong>
+          </div>
+          <div>
+            <span>总点数</span>
+            <strong id="total-score">0</strong>
+          </div>
+        </section>
+
+        <div class="stage" aria-label="三维骰子动画区域">
+          <div class="dice-grid" id="dice-grid"></div>
+          <p class="empty-state" id="empty-state">选择数量后点击掷骰子</p>
+        </div>
+      </section>
+
+      <section class="view" id="history-view" aria-labelledby="history-title">
+        <div class="history-heading">
+          <div>
+            <h2 id="history-title">历史掷出记录</h2>
+            <p class="subtle">记录本机浏览器中的离线掷骰结果。</p>
+          </div>
+          <button class="clear-button" type="button" id="clear-history">清空历史</button>
+        </div>
+        <ol class="history-list" id="history-list"></ol>
+        <p class="empty-history" id="empty-history">还没有历史记录。</p>
+      </section>
+    </main>
+
+    <template id="die-template">
+      <div class="die-wrap">
+        <div class="die" aria-label="骰子">
+          <div class="face face-1"><span></span></div>
+          <div class="face face-2"><span></span><span></span></div>
+          <div class="face face-3"><span></span><span></span><span></span></div>
+          <div class="face face-4"><span></span><span></span><span></span><span></span></div>
+          <div class="face face-5"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="face face-6"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const diceCountSelect = document.querySelector("#dice-count");
+      const rollButton = document.querySelector("#roll-button");
+      const diceGrid = document.querySelector("#dice-grid");
+      const dieTemplate = document.querySelector("#die-template");
+      const currentCount = document.querySelector("#current-count");
+      const totalScore = document.querySelector("#total-score");
+      const emptyState = document.querySelector("#empty-state");
+      const historyList = document.querySelector("#history-list");
+      const emptyHistory = document.querySelector("#empty-history");
+      const clearHistoryButton = document.querySelector("#clear-history");
+      const tabButtons = document.querySelectorAll(".tab-button");
+      const views = {
+        roller: document.querySelector("#roller-view"),
+        history: document.querySelector("#history-view"),
+      };
+
+      const historyKey = "offline-dice-roll-history";
+      const faceTransforms = {
+        1: "rotateX(-14deg) rotateY(18deg)",
+        2: "rotateX(-12deg) rotateY(-78deg)",
+        3: "rotateX(-102deg) rotateY(12deg)",
+        4: "rotateX(78deg) rotateY(14deg)",
+        5: "rotateX(-12deg) rotateY(102deg)",
+        6: "rotateX(-10deg) rotateY(198deg)",
+      };
+
+      let history = readHistory();
+      renderHistory();
+
+      tabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const nextView = button.dataset.view;
+          tabButtons.forEach((item) => item.classList.toggle("active", item === button));
+          Object.entries(views).forEach(([name, view]) => {
+            view.classList.toggle("active", name === nextView);
+          });
+        });
+      });
+
+      rollButton.addEventListener("click", rollDice);
+      clearHistoryButton.addEventListener("click", () => {
+        history = [];
+        saveHistory();
+        renderHistory();
+      });
+
+      function rollDice() {
+        const count = Number(diceCountSelect.value);
+        const rolls = Array.from({ length: count }, () => randomDie());
+        const total = rolls.reduce((sum, value) => sum + value, 0);
+
+        rollButton.disabled = true;
+        emptyState.hidden = true;
+        diceGrid.replaceChildren();
+        currentCount.textContent = count;
+        totalScore.textContent = total;
+
+        rolls.forEach((value, index) => {
+          const die = createDie(value);
+          diceGrid.append(die.wrap);
+
+          const start = randomSpin(index);
+          die.cube.style.transform = start;
+          die.cube.classList.add("rolling");
+
+          requestAnimationFrame(() => {
+            die.cube.style.transform = `${start} rotateX(360deg) rotateY(540deg)`;
+            setTimeout(() => {
+              die.cube.style.transform = faceTransforms[value];
+            }, 120 + index * 45);
+          });
+        });
+
+        window.setTimeout(() => {
+          rollButton.disabled = false;
+          history.unshift({
+            id: Date.now(),
+            count,
+            total,
+            rolls,
+            createdAt: new Date().toISOString(),
+          });
+          history = history.slice(0, 60);
+          saveHistory();
+          renderHistory();
+        }, 1180);
+      }
+
+      function createDie(value) {
+        const fragment = dieTemplate.content.cloneNode(true);
+        const wrap = fragment.querySelector(".die-wrap");
+        const cube = fragment.querySelector(".die");
+        cube.setAttribute("aria-label", `骰子点数 ${value}`);
+        return { wrap, cube };
+      }
+
+      function randomDie() {
+        return Math.floor(Math.random() * 6) + 1;
+      }
+
+      function randomSpin(index) {
+        const x = 260 + index * 33 + Math.floor(Math.random() * 220);
+        const y = 320 + index * 47 + Math.floor(Math.random() * 260);
+        const z = Math.floor(Math.random() * 120) - 60;
+        return `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;
+      }
+
+      function readHistory() {
+        try {
+          const stored = localStorage.getItem(historyKey);
+          return stored ? JSON.parse(stored) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveHistory() {
+        localStorage.setItem(historyKey, JSON.stringify(history));
+      }
+
+      function renderHistory() {
+        historyList.replaceChildren();
+        emptyHistory.hidden = history.length > 0;
+        clearHistoryButton.disabled = history.length === 0;
+
+        history.forEach((record) => {
+          const item = document.createElement("li");
+          item.className = "history-item";
+
+          const details = document.createElement("div");
+          const time = document.createElement("time");
+          const date = new Date(record.createdAt);
+          time.dateTime = record.createdAt;
+          time.textContent = date.toLocaleString("zh-CN", {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+
+          const meta = document.createElement("div");
+          meta.className = "history-detail";
+          meta.textContent = `${record.count} 个骰子`;
+
+          const rolls = document.createElement("div");
+          rolls.className = "history-rolls";
+          rolls.textContent = record.rolls.join(" + ");
+
+          const total = document.createElement("div");
+          total.className = "history-total";
+          total.textContent = record.total;
+          total.setAttribute("aria-label", `总点数 ${record.total}`);
+
+          details.append(time, meta, rolls);
+          item.append(details, total);
+          historyList.append(item);
+        });
+      }
+    </script>
+  </body>
+</html>
